@@ -1,0 +1,109 @@
+stages:
+  - package
+# - deploy
+
+.kaniko-build-main-template:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.24.0-debug
+    entrypoint: [""]
+  variables:
+    DOCKERIZED_IMAGE: $VISAI_GITLAB_CONTAINER_REGISTRY/projects/bdi/application/frontend:$CI_COMMIT_SHA
+    GODEBUG: "http2client=0"
+  script:
+    - cp $KANIKO_VISAI_GITLAB_REGISTRY_CONFIG /kaniko/.docker/config.json
+    - cp $DOTENV ./.env
+    - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${DOCKERIZED_IMAGE}" --snapshot-mode=redo --use-new-run --cache=true --no-push-cache=true
+    - |
+      cat << EOF > build.env
+      IMAGE_REF=$DOCKERIZED_IMAGE
+      PROJECT_NAME=frontend
+      APP_NAME=frontend
+      EOF
+  artifacts:
+    reports:
+      dotenv: build.env
+
+.kaniko-build-siriraj-template:
+  stage: package
+  image:
+    name: gcr.io/kaniko-project/executor:v1.24.0-debug
+    entrypoint: [""]
+  variables:
+    DOCKERIZED_IMAGE: $VISAI_GITLAB_CONTAINER_REGISTRY/projects/bdi/application/frontend/siriraj:$CI_COMMIT_SHA
+    GODEBUG: "http2client=0"
+  script:
+    - cp $KANIKO_VISAI_GITLAB_REGISTRY_CONFIG /kaniko/.docker/config.json
+    - cp $DOTENV ./.env
+    - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${DOCKERIZED_IMAGE}" --snapshot-mode=redo --use-new-run --cache=true --no-push-cache=true
+    - |
+      cat << EOF > build.env
+      IMAGE_REF=$DOCKERIZED_IMAGE
+      PROJECT_NAME=frontend
+      APP_NAME=frontend
+      EOF
+  artifacts:
+    reports:
+      dotenv: build.env
+
+kaniko-build-dev:
+  extends: .kaniko-build-main-template
+  only:
+    - dev
+  environment: development
+
+kaniko-build-dev-siriraj:
+  extends: .kaniko-build-siriraj-template
+  only:
+    - dev
+  needs:
+    - job: kaniko-build-dev
+      artifacts: true
+  environment: development-siriraj
+
+kaniko-build-prod:
+  extends: .kaniko-build-main-template
+  only:
+    - main
+  environment: production
+
+kaniko-build-prod-siriraj:
+  extends: .kaniko-build-siriraj-template
+  only:
+    - main
+  needs:
+    - job: kaniko-build-prod
+      artifacts: true
+  environment: production-siriraj
+# .deploy-template:
+#   stage: deploy
+#   variables:
+#     IMAGE_REF: "${IMAGE_REF}"
+#     PROJECT_NAME: $PROJECT_NAME
+#     APP_NAME: $APP_NAME
+#   trigger:
+#     project: visai-ai/projects/bdi/kubernetes
+
+# deploy-dev:
+#   extends: .deploy-template
+#   only:
+#   - dev
+#   variables:
+#     TARGET_ENV: dev
+#   needs:
+#   - job: kaniko-build-dev
+#     artifacts: true
+#   - job: kaniko-build-dev-siriraj
+#     artifacts: true
+
+# deploy-prod:
+#   extends: .deploy-template
+#   only:
+#   - main
+#   variables:
+#     TARGET_ENV: prod
+#   needs:
+#   - job: kaniko-build-prod
+#     artifacts: true
+#   - job: kaniko-build-prod-siriraj
+#     artifacts: true
